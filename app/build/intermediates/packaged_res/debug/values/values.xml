@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <style name="Theme.BookVillageMock" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">#c41e3a</item>
+        <item name="colorPrimaryDark">#9a1830</item>
+    </style>
+</resources>
