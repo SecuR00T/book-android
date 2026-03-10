@@ -6,8 +6,6 @@ drawable ic_launcher_foreground
 drawable ic_nav_back
 drawable ic_nav_home
 drawable ic_nav_refresh
-id btnAdmin
-id btnBookVillage
 id btnNavBack
 id btnNavHome
 id btnNavRefresh

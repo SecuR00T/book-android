@@ -710,8 +710,6 @@ id async
 id beginning
 id blocking
 id bottom
-id btnAdmin
-id btnBookVillage
 id btnNavBack
 id btnNavHome
 id btnNavRefresh

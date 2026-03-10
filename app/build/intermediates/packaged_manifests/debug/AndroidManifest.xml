@@ -34,6 +34,65 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep link: bookvillage scheme -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="bookvillage" />
+            </intent-filter>
+
+            <!-- Deep link: http/https -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="bookvillage.local"
+                    android:scheme="http" />
+                <data
+                    android:host="bookvillage.local"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+
+        <!-- Exported activity for viewing user profile without authentication -->
+        <activity
+            android:name="com.bookvillage.mock.ProfileActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="profile"
+                    android:scheme="bookvillage" />
+            </intent-filter>
+        </activity>
+
+        <!-- Exported activity for order details without authentication -->
+        <activity
+            android:name="com.bookvillage.mock.OrderActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="order"
+                    android:scheme="bookvillage" />
+            </intent-filter>
         </activity>
 
         <provider
