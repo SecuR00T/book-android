@@ -11,7 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 class OrderActivity : AppCompatActivity() {
 
-    private val baseUrl = "http://127.0.0.1:8080"
+    private val baseUrl = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com/"
 
     companion object {
         private const val TAG = "BookVillage_Order"

@@ -18,7 +18,7 @@ class MainActivity : AppCompatActivity() {
 
     // USB real-device mode:
     // - BookVillage frontend via adb reverse: http://127.0.0.1:8080 -> host:80
-    private val homeUrl = "http://127.0.0.1:8080"
+    private val homeUrl = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com/"
 
     // API credentials for backend communication
     private val API_KEY = "bv-internal-2024-secret"

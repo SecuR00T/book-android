@@ -11,7 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 class ProfileActivity : AppCompatActivity() {
 
-    private val baseUrl = "http://127.0.0.1:8080"
+    private val baseUrl = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com/"
 
     companion object {
         private const val TAG = "BookVillage_Profile"
@@ -31,15 +31,14 @@ class ProfileActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_NO_CACHE
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
-
-        // Load profile page directly without authentication check
+        // Hardcoded bypass token (취약점: 소스코드 내 운영 토큰 하드코딩)
+        val bypassToken = "BV-ANDROID-DEEPLINK-2024"
         val userId = intent.data?.getQueryParameter("userId") ?: intent.getStringExtra("userId") ?: "1"
-        val targetUrl = "$baseUrl/mypage"
+        val targetUrl = "$baseUrl/mypage/orders"
 
         Log.d(TAG, "Loading profile for userId: $userId without authentication")
         Log.d(TAG, "Target URL: $targetUrl")
+        Log.d(TAG, "Bypass token: $bypassToken")
 
         // Inject session cookie to bypass authentication
         android.webkit.CookieManager.getInstance().apply {
@@ -47,6 +46,22 @@ class ProfileActivity : AppCompatActivity() {
             setCookie(baseUrl, "remember_uid=$userId; Path=/")
             setCookie(baseUrl, "role=admin; Path=/")
             flush()
+        }
+
+        webView.webChromeClient = WebChromeClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                // sessionStorage에 토큰 주입하여 React 앱 인증 우회
+                view?.evaluateJavascript("""
+                    (function() {
+                        sessionStorage.setItem('bookvillage_session_token', '$bypassToken');
+                        if (window.location.pathname !== '/mypage/orders') {
+                            window.location.href = '$targetUrl';
+                        }
+                    })();
+                """.trimIndent(), null)
+            }
         }
 
         webView.loadUrl(targetUrl)
