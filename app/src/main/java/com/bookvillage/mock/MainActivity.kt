@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -28,6 +29,28 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "BookVillage"
+    }
+
+    // JS Interface: origin 검증 없이 모든 페이지에서 호출 가능 (취약점)
+    inner class AppBridge {
+        @JavascriptInterface
+        fun getAuthToken(): String {
+            Log.d(TAG, "getAuthToken() called from JS")
+            return JWT_SECRET
+        }
+
+        @JavascriptInterface
+        fun getApiKey(): String {
+            Log.d(TAG, "getApiKey() called from JS")
+            return API_KEY
+        }
+
+        @JavascriptInterface
+        fun getUserInfo(): String {
+            val cookies = CookieManager.getInstance().getCookie(homeUrl) ?: ""
+            Log.d(TAG, "getUserInfo() called from JS, cookies: $cookies")
+            return """{"adminPassword":"$ADMIN_PASSWORD","cookies":"$cookies"}"""
+        }
     }
 
     private lateinit var webView: WebView
@@ -56,6 +79,10 @@ class MainActivity : AppCompatActivity() {
             allowFileAccessFromFileURLs = true
             allowUniversalAccessFromFileURLs = true
         }
+        // 취약점: origin 검증 없이 "App" 인터페이스를 모든 URL에 노출
+        // 악의적 서버가 App.getAuthToken() 호출로 토큰 탈취 가능
+        webView.addJavascriptInterface(AppBridge(), "App")
+
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
