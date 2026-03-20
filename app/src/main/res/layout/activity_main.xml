@@ -10,6 +10,17 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <!-- 관리자 전용: ADB로 권한 탈취 후 표시됨 (기본 hidden) -->
+    <Button
+        android:id="@+id/btnAdminNotify"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:text="[관리자] 전체 알림 발송"
+        android:backgroundTint="#C62828"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="56dp"
