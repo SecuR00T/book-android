@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+    <string name="gcm_defaultSenderId" translatable="false">000000000000</string>
+    <string name="google_api_key" translatable="false">AIzaSyDummy-BookVillage-CTF-Key-000000000</string>
+    <string name="google_app_id" translatable="false">1:000000000000:android:0000000000000000000000</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyDummy-BookVillage-CTF-Key-000000000</string>
+    <string name="google_storage_bucket" translatable="false">bookvillage-ctf.appspot.com</string>
+    <string name="project_id" translatable="false">bookvillage-ctf</string>
     <style name="Theme.BookVillageMock" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="colorPrimary">#c41e3a</item>
         <item name="colorPrimaryDark">#9a1830</item>

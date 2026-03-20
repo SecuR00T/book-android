@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.bookvillage.mock.app-mergeDebugResources-18:/values-port/values-port.xml",
+            "outputFile": "com.bookvillage.mock.app-mergeDebugResources-23:/values-port/values-port.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\User\\.gradle\\caches\\transforms-3\\af226701e07b6e5753175ffad1df9a85\\transformed\\appcompat-1.6.1\\res\\values-port\\values-port.xml",
+                    "source": "C:\\Users\\User\\.gradle\\caches\\transforms-3\\9e4727ecd68cc8a51a0652f976b67a41\\transformed\\appcompat-1.6.1\\res\\values-port\\values-port.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

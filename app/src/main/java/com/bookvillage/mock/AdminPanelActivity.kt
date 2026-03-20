@@ -1,5 +1,6 @@
 package com.bookvillage.mock
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
@@ -316,11 +317,13 @@ class AdminPanelActivity : AppCompatActivity() {
             OutputStreamWriter(conn.outputStream).use { it.write(payload) }
 
             val code     = conn.responseCode
-            val response = conn.inputStream.bufferedReader().readText()
+            val response = if (code in 200..299) conn.inputStream.bufferedReader().readText()
+                           else conn.errorStream?.bufferedReader()?.readText() ?: ""
             Log.d(TAG, "FCM send ($code): $response")
             val json   = JSONObject(response)
-            val result = if (json.optBoolean("success")) "발송 완료: ${json.optString("message")}"
-                         else "실패: ${json.optString("message")}"
+            val result = if (code in 200..299 && json.optBoolean("success"))
+                             "발송 완료: ${json.optString("message")}"
+                         else "실패 ($code): ${json.optString("message", response)}"
 
             runOnUiThread {
                 btnSend.isEnabled = true

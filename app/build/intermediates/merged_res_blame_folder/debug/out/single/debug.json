@@ -1,26 +1,26 @@
 [
     {
-        "merged": "com.bookvillage.mock.app-merged_res-20:/drawable_ic_nav_refresh.xml.flat",
-        "source": "com.bookvillage.mock.app-main-22:/drawable/ic_nav_refresh.xml"
+        "merged": "com.bookvillage.mock.app-merged_res-25:/drawable_ic_nav_refresh.xml.flat",
+        "source": "com.bookvillage.mock.app-main-27:/drawable/ic_nav_refresh.xml"
     },
     {
-        "merged": "com.bookvillage.mock.app-merged_res-20:/drawable_ic_launcher.xml.flat",
-        "source": "com.bookvillage.mock.app-main-22:/drawable/ic_launcher.xml"
+        "merged": "com.bookvillage.mock.app-merged_res-25:/layout_activity_main.xml.flat",
+        "source": "com.bookvillage.mock.app-main-27:/layout/activity_main.xml"
     },
     {
-        "merged": "com.bookvillage.mock.app-merged_res-20:/drawable_ic_nav_back.xml.flat",
-        "source": "com.bookvillage.mock.app-main-22:/drawable/ic_nav_back.xml"
+        "merged": "com.bookvillage.mock.app-merged_res-25:/drawable_ic_nav_back.xml.flat",
+        "source": "com.bookvillage.mock.app-main-27:/drawable/ic_nav_back.xml"
     },
     {
-        "merged": "com.bookvillage.mock.app-merged_res-20:/drawable_ic_launcher_foreground.xml.flat",
-        "source": "com.bookvillage.mock.app-main-22:/drawable/ic_launcher_foreground.xml"
+        "merged": "com.bookvillage.mock.app-merged_res-25:/drawable_ic_nav_home.xml.flat",
+        "source": "com.bookvillage.mock.app-main-27:/drawable/ic_nav_home.xml"
     },
     {
-        "merged": "com.bookvillage.mock.app-merged_res-20:/drawable_ic_nav_home.xml.flat",
-        "source": "com.bookvillage.mock.app-main-22:/drawable/ic_nav_home.xml"
+        "merged": "com.bookvillage.mock.app-merged_res-25:/drawable_ic_launcher.xml.flat",
+        "source": "com.bookvillage.mock.app-main-27:/drawable/ic_launcher.xml"
     },
     {
-        "merged": "com.bookvillage.mock.app-merged_res-20:/layout_activity_main.xml.flat",
-        "source": "com.bookvillage.mock.app-main-22:/layout/activity_main.xml"
+        "merged": "com.bookvillage.mock.app-merged_res-25:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.bookvillage.mock.app-main-27:/drawable/ic_launcher_foreground.xml"
     }
 ]

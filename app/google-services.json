@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "417980357111",
+    "project_id": "bookvillage-9f327",
+    "storage_bucket": "bookvillage-9f327.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:417980357111:android:041db36d74a290364036f2",
+        "android_client_info": {
+          "package_name": "com.bookvillage.mock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKjY2PpAEqrUw3i7V3L40ZvTefe_k-N_M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

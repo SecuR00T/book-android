@@ -21,9 +21,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         private const val TAG = "BookVillage"
         private const val CHANNEL_ID = "bookvillage_channel"
         private const val CHANNEL_NAME = "BookVillage 알림"
-    }
-
-    companion object {
         private const val BACKEND =
             "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com"
     }
