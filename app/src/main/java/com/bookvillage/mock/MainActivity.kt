@@ -2,6 +2,7 @@ package com.bookvillage.mock
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -23,12 +24,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
     // USB real-device mode:
     // - BookVillage frontend via adb reverse: http://127.0.0.1:8080 -> host:80
     private val homeUrl = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com/"
+
+    private val BACKEND_URL = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com"
 
     // API credentials for backend communication
     // 취약점: 크레덴셜 하드코딩 - 디컴파일 시 노출 (apktool / jadx)
@@ -235,6 +241,96 @@ class MainActivity : AppCompatActivity() {
         val isAdmin = !adminToken.isNullOrEmpty()
         btnAdminNotify.visibility = if (isAdmin) View.VISIBLE else View.GONE
         Log.d(TAG, "onResume - admin_token present: $isAdmin")
+
+        // [Phase 2] 긴급 공지사항 팝업 체크
+        // 공격자가 관리자 권한 탈취 후 공지사항에 악성 링크 삽입 시
+        // 앱 실행/복귀 시마다 백엔드에서 최신 긴급 공지를 조회하여 팝업 표시
+        fetchAndShowUrgentNotice()
+    }
+
+    /**
+     * ── [Phase 2] 긴급 공지사항 팝업 ─────────────────────────────────────
+     *
+     * 공격 시나리오:
+     *   1. 공격자가 관리자 권한 탈취 (Phase 1: APK 디컴파일 → 하드코딩 크레덴셜 추출)
+     *   2. /admin/api/notices 에 긴급 공지 등록:
+     *      { "title": "긴급 보안 업데이트", "content": "...", "linkUrl": "http://attacker-c2.com/fake-store", "urgent": true }
+     *   3. 사용자 앱 실행 → 이 메서드 호출 → 팝업 표시
+     *   4. 사용자는 '공식 공지사항'이므로 신뢰 → 링크 클릭
+     *   5. [Phase 3] WebView가 가짜 구글 플레이 스토어로 이동
+     *
+     * 취약점:
+     *   - 공지사항 API에 URL 검증 없음 → 임의 URL 삽입 가능
+     *   - 팝업에서 URL 검증 없이 WebView에 로드 → Open Redirect
+     *   - 사용자 신뢰를 악용한 사회공학적 공격
+     */
+    private fun fetchAndShowUrgentNotice() {
+        thread {
+            try {
+                val conn = URL("$BACKEND_URL/api/notices/latest-urgent")
+                    .openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+
+                if (conn.responseCode == 200) {
+                    val json = JSONObject(conn.inputStream.bufferedReader().readText())
+                    val noticeId = json.optLong("id", -1L)
+                    val title    = json.optString("title", "")
+                    val content  = json.optString("content", "")
+                    val linkUrl  = json.optString("linkUrl", "")
+
+                    if (noticeId < 0 || title.isEmpty()) return@thread
+
+                    // 이미 표시한 공지는 재표시 하지 않음 (noticeId 추적)
+                    val prefs = getSharedPreferences("bookvillage_prefs", MODE_PRIVATE)
+                    val lastShownId = prefs.getLong("last_notice_popup_id", -1L)
+                    if (noticeId == lastShownId) return@thread
+
+                    prefs.edit().putLong("last_notice_popup_id", noticeId).apply()
+                    Log.d(TAG, "[Phase 2] Urgent notice fetched: id=$noticeId title=$title linkUrl=$linkUrl")
+
+                    runOnUiThread { showUrgentNoticeDialog(title, content, linkUrl) }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "[Phase 2] 공지 fetch 실패: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * ── [Phase 2 → Phase 3] 긴급 공지 팝업 다이얼로그 ───────────────────
+     *
+     * 취약점:
+     *   - linkUrl 검증 없음 → 공격자 서버 URL 삽입 가능
+     *   - WebView가 외부 URL을 아무 제한 없이 로드
+     *     → 가짜 구글 플레이 스토어(Phase 3)로 유도
+     *   - android:usesCleartextTraffic=true → HTTP 피싱 페이지 로드 허용
+     *   - 사용자는 '공식 앱 공지사항'을 신뢰 → 경계심 낮음
+     *
+     * [방어 방법]
+     *   - linkUrl을 allowlist 도메인만 허용
+     *   - shouldOverrideUrlLoading에서 외부 도메인 차단
+     *   - 공지사항 등록 시 서버에서 URL 패턴 검증
+     */
+    private fun showUrgentNoticeDialog(title: String, content: String, linkUrl: String) {
+        val builder = AlertDialog.Builder(this)
+            .setTitle("🔔 $title")
+            .setMessage(content)
+            .setCancelable(false)
+
+        if (linkUrl.isNotEmpty()) {
+            builder.setPositiveButton("업데이트 / 자세히 보기") { _, _ ->
+                // 취약점: URL 검증 없이 WebView에 로드
+                // → 공격자 서버(가짜 플레이 스토어)로 직접 이동
+                Log.d(TAG, "[Phase 2→3] Notice link clicked, loading: $linkUrl")
+                webView.loadUrl(linkUrl)
+            }
+        }
+
+        builder.setNegativeButton("나중에") { dialog, _ -> dialog.dismiss() }
+        builder.show()
     }
 
     override fun onNewIntent(intent: Intent?) {
