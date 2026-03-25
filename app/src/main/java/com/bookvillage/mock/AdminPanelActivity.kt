@@ -14,58 +14,6 @@ import java.net.URL
 import java.security.MessageDigest
 import kotlin.concurrent.thread
 
-/**
- * ═══════════════════════════════════════════════════════════════════
- *  CTF: 관리자 패널 - 공략 경로 6가지
- * ═══════════════════════════════════════════════════════════════════
- *
- *  [진입]
- *  apktool/jadx 디컴파일 → AndroidManifest에서 딥링크 발견
- *    adb shell am start -W \
- *      -a android.intent.action.VIEW \
- *      -d "bookvillage://admin-panel" \
- *      com.bookvillage.mock
- *
- *  ── 서버 인증 우회 ──────────────────────────────────────────────
- *  Path A │ SQL Injection
- *         │ /admin/api/auth/login 의 username 필드에 주입
- *         │ 예) username: "admin' --"  password: (임의)
- *         │ → 비밀번호 검사 WHERE 절 주석처리 → 관리자 토큰 발급
- *
- *  Path B │ JWT 시크릿 추출 → 토큰 위조
- *         │ jadx로 이 파일 디컴파일 →
- *         │   JWT_SECRET = "bv-jwt-signing-key-do-not-share" 발견
- *         │ 위조 토큰 생성 (아래 forgeAdminToken() 참고)
- *         │   payload = base64('{"role":"ADMIN","id":1}')
- *         │   sig     = sha1(payload + JWT_SECRET)
- *         │   token   = payload + "." + sig
- *
- *  Path C │ XOR 하드코딩 bypass 토큰
- *         │ jadx로 이 파일 디컴파일 → decodeBypass() 발견
- *         │ ENCODED_BYPASS XOR XOR_KEY → "BV-BYPASS-KEY-2024"
- *         │ 딥링크: bookvillage://admin-panel?token=BV-BYPASS-KEY-2024
- *
- *  ── 앱 수준 인증 우회 (재패키징 없이) ──────────────────────────
- *  Bypass D │ Intent Extra 주입 (취약한 토큰 형식 검증)
- *           │ jadx로 isWeakTokenValid() 발견 → split("-")[3]=="admin" 확인
- *           │ adb shell am start \
- *           │   -n com.bookvillage.mock/.AdminPanelActivity \
- *           │   --es admin_token "x-x-x-admin-x-x"
- *
- *  Bypass E │ allowBackup=true → SharedPreferences 변조
- *           │ 1. adb backup -noapk com.bookvillage.mock -f backup.ab
- *           │ 2. backup.ab 압축 해제 → bookvillage_prefs.xml 수정
- *           │    <boolean name="is_admin" value="true" />
- *           │ 3. adb restore backup_patched.ab
- *           │ → 앱 재시작 시 is_admin=true 감지 → 관리자 패널 진입
- *
- *  Bypass F │ HTTP 평문 통신 → Burp Suite 응답 변조
- *           │ 1. Android 프록시: Burp Suite 127.0.0.1:8080
- *           │ 2. GET /api/auth/verify-role 요청 인터셉트
- *           │ 3. 응답 {"role":"USER"} → {"role":"ADMIN"} 변조
- *           │ → 서버 무결성 검증 없음 → 관리자 패널 진입
- * ═══════════════════════════════════════════════════════════════════
- */
 class AdminPanelActivity : AppCompatActivity() {
 
     companion object {
@@ -109,17 +57,11 @@ class AdminPanelActivity : AppCompatActivity() {
     private lateinit var tvLoginHint: TextView
     private lateinit var tvLoginStatus: TextView
 
-    // 알림 발송 뷰
+    // 공지 패널 뷰
     private lateinit var layoutNotify: LinearLayout
     private lateinit var tvAdminWelcome: TextView
-    private lateinit var etNotifyTitle: EditText
-    private lateinit var etNotifyBody: EditText
-    private lateinit var etNotifyUrl: EditText
-    private lateinit var btnSend: Button
     private lateinit var btnOpenWebAdmin: Button
     private lateinit var btnLogout: Button
-    private lateinit var tvSendResult: TextView
-    private lateinit var progressSend: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -264,29 +206,19 @@ class AdminPanelActivity : AppCompatActivity() {
         }
     }
 
-    // ── 알림 발송 패널 ──────────────────────────────────────────────
+    // ── 관리자 패널 ──────────────────────────────────────────────
 
     private fun showNotifyPanel(name: String, token: String) {
         layoutLogin.visibility = View.GONE
         layoutNotify.visibility = View.VISIBLE
         tvAdminWelcome.text = "환영합니다, $name 님 (관리자)"
 
-        btnSend.setOnClickListener {
-            val title = etNotifyTitle.text.toString().trim()
-            val body  = etNotifyBody.text.toString().trim()
-            val url   = etNotifyUrl.text.toString().trim()
-            if (body.isEmpty()) { tvSendResult.text = "알림 내용을 입력하세요."; return@setOnClickListener }
-            btnSend.isEnabled = false
-            progressSend.visibility = View.VISIBLE
-            tvSendResult.text = ""
-            thread { doSendNotification(token, title, body, url) }
-        }
-
-        // AdminGateActivity에서 받아온 실제 SESSION_TOKEN으로 WebView 이동
-        // 쿠키는 이미 CookieManager에 심겨 있으므로 URL 이동만 하면 됨
         btnOpenWebAdmin.setOnClickListener {
+            val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+            val savedToken = prefs.getString(KEY_ADMIN_TOKEN, "BV-BYPASS-KEY-2024") ?: "BV-BYPASS-KEY-2024"
+            val adminUrl = "http://192.168.101.245:18080?accessToken=$savedToken"
             val webAdminIntent = Intent(this, MainActivity::class.java).apply {
-                putExtra("fcm_url", "$BACKEND/admin")
+                putExtra("open_url", adminUrl)
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
             startActivity(webAdminIntent)
@@ -296,47 +228,6 @@ class AdminPanelActivity : AppCompatActivity() {
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .remove(KEY_ADMIN_TOKEN).remove(KEY_ADMIN_NAME).apply()
             showLoginPanel()
-        }
-    }
-
-    private fun doSendNotification(token: String, title: String, body: String, url: String) {
-        try {
-            val payload = JSONObject().apply {
-                put("title", title); put("body", body)
-                if (url.isNotEmpty()) put("url", url)
-            }.toString()
-
-            val conn = URL("$BACKEND/admin/api/notifications/send").openConnection()
-                    as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("X-Admin-Token", token)
-            conn.doOutput = true
-            conn.connectTimeout = 10000
-            conn.readTimeout = 15000
-            OutputStreamWriter(conn.outputStream).use { it.write(payload) }
-
-            val code     = conn.responseCode
-            val response = if (code in 200..299) conn.inputStream.bufferedReader().readText()
-                           else conn.errorStream?.bufferedReader()?.readText() ?: ""
-            Log.d(TAG, "FCM send ($code): $response")
-            val json   = JSONObject(response)
-            val result = if (code in 200..299 && json.optBoolean("success"))
-                             "발송 완료: ${json.optString("message")}"
-                         else "실패 ($code): ${json.optString("message", response)}"
-
-            runOnUiThread {
-                btnSend.isEnabled = true
-                progressSend.visibility = View.GONE
-                tvSendResult.text = result
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "FCM send error", e)
-            runOnUiThread {
-                btnSend.isEnabled = true
-                progressSend.visibility = View.GONE
-                tvSendResult.text = "오류: ${e.message}"
-            }
         }
     }
 
@@ -460,19 +351,9 @@ class AdminPanelActivity : AppCompatActivity() {
             addView(btnLogin); addView(tvLoginStatus)
         }
 
-        // 알림 발송 패널
+        // 공지 패널
         layoutNotify = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        tvAdminWelcome = TextView(this).apply { textSize = 16f; setPadding(0,0,0,24) }
-        val tvSendTitle = TextView(this).apply { text = "전체 사용자 FCM 알림 발송"; textSize = 18f; setPadding(0,0,0,16) }
-        etNotifyTitle = EditText(this).apply { hint = "알림 제목"; setText("BookVillage 공지") }
-        etNotifyBody  = EditText(this).apply { hint = "알림 내용"; minLines = 3 }
-        etNotifyUrl   = EditText(this).apply { hint = "클릭 시 이동할 URL (선택)" }
-        btnSend = Button(this).apply {
-            text = "전체 사용자에게 FCM 발송"
-            setBackgroundColor(0xFFC62828.toInt()); setTextColor(0xFFFFFFFF.toInt())
-        }
-        progressSend = ProgressBar(this).apply { visibility = View.GONE }
-        tvSendResult = TextView(this).apply { setPadding(0, 8, 0, 0) }
+        tvAdminWelcome = TextView(this).apply { textSize = 16f; setPadding(0, 0, 0, 24) }
         btnOpenWebAdmin = Button(this).apply {
             text = "웹 관리자 패널 열기"
             setBackgroundColor(0xFF2E7D32.toInt()); setTextColor(0xFFFFFFFF.toInt())
@@ -480,15 +361,17 @@ class AdminPanelActivity : AppCompatActivity() {
         btnLogout = Button(this).apply {
             text = "로그아웃"; setBackgroundColor(0xFF757575.toInt()); setTextColor(0xFFFFFFFF.toInt())
         }
+
         layoutNotify.apply {
-            addView(tvAdminWelcome); addView(tvSendTitle)
-            addView(etNotifyTitle); addView(etNotifyBody); addView(etNotifyUrl)
-            addView(btnSend); addView(progressSend); addView(tvSendResult)
-            addView(btnOpenWebAdmin); addView(btnLogout)
+            addView(tvAdminWelcome)
+            addView(btnOpenWebAdmin)
+            addView(btnLogout)
         }
 
-        container.addView(layoutLogin)
-        container.addView(layoutNotify)
-        setContentView(root)
+        val mp = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        val wc = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        container.addView(layoutLogin,  android.widget.LinearLayout.LayoutParams(mp, wc))
+        container.addView(layoutNotify, android.widget.LinearLayout.LayoutParams(mp, wc))
+        setContentView(root, android.view.ViewGroup.LayoutParams(mp, mp))
     }
 }

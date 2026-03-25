@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -86,31 +85,6 @@
             </intent-filter>
         </activity>
 
-        <!--
-            CTF Challenge 1 & 2: Smali 분석 대상 Activity
-            apktool로 디컴파일 후 manifest에서 발견
 
-            Challenge 1 (Magic Number):
-              adb shell am start \
-                -n com.bookvillage.mock/.AdminGateActivity \
-                - -ei gate_key <smali에서_계산한_값>
-
-            Challenge 2 (Smali 패치):
-              apktool d app.apk
-              → AdminGateActivity.smali에서 isDebugMode 필드 패치
-              → apktool b / 재서명 / 재설치
-        -->
-        <activity
-            android:name=".AdminGateActivity"
-            android:exported="true"
-            android:label="" />
-
-        <service
-            android:name=".MyFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
     </application>
 </manifest>

@@ -1,0 +1,15 @@
+# Gradle / Android build outputs
+/.gradle/
+/build/
+/app/build/
+
+# Decompiled and patched artifacts
+/bv_decompiled/
+/bv_patched.apk
+/ctf.keystore
+
+# Local machine files
+/local.properties
+
+# IDE metadata
+/.idea/

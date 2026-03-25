@@ -1,40 +1,35 @@
 package com.bookvillage.mock
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.app.AlertDialog
+import android.app.DownloadManager
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.MimeTypeMap
+import android.webkit.URLUtil
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import com.google.firebase.messaging.FirebaseMessaging
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
     // USB real-device mode:
     // - BookVillage frontend via adb reverse: http://127.0.0.1:8080 -> host:80
     private val homeUrl = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com/"
-
-    private val BACKEND_URL = "http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com"
 
     // API credentials for backend communication
     // 취약점: 크레덴셜 하드코딩 - 디컴파일 시 노출 (apktool / jadx)
@@ -46,7 +41,12 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "BookVillage"
+        private val DOWNLOADABLE_FILE_PATTERN =
+            Regex("\\.(apk|aab|zip|pdf|msi|exe|dmg)(?:$|[?#])", RegexOption.IGNORE_CASE)
     }
+
+    private val baseSiteUrl: String
+        get() = homeUrl.trimEnd('/')
 
     // JS Interface: origin 검증 없이 모든 페이지에서 호출 가능 (취약점)
     inner class AppBridge {
@@ -67,15 +67,6 @@ class MainActivity : AppCompatActivity() {
             val cookies = CookieManager.getInstance().getCookie(homeUrl) ?: ""
             Log.d(TAG, "getUserInfo() called from JS, cookies: $cookies")
             return """{"adminPassword":"$ADMIN_PASSWORD","cookies":"$cookies"}"""
-        }
-
-        // 취약점: FCM 토큰을 JS에 그대로 노출
-        @JavascriptInterface
-        fun getFcmToken(): String {
-            val prefs = getSharedPreferences("bookvillage_prefs", MODE_PRIVATE)
-            val token = prefs.getString("fcm_token", "") ?: ""
-            Log.d(TAG, "getFcmToken() called from JS, token: $token")
-            return token
         }
 
         /**
@@ -124,16 +115,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var webView: WebView
+    private lateinit var btnNavLogin: Button
+    private lateinit var btnNavLogout: Button
     private lateinit var btnNavBack: ImageButton
     private lateinit var btnNavHome: ImageButton
     private lateinit var btnNavRefresh: ImageButton
-    private lateinit var btnAdminNotify: Button
-
-    private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            Log.d(TAG, "Notification permission granted: $granted")
-            if (granted) fetchFcmToken()
-        }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -142,14 +128,11 @@ class MainActivity : AppCompatActivity() {
         supportActionBar?.hide()
 
         webView = findViewById(R.id.webView)
+        btnNavLogin = findViewById(R.id.btnNavLogin)
+        btnNavLogout = findViewById(R.id.btnNavLogout)
         btnNavBack = findViewById(R.id.btnNavBack)
         btnNavHome = findViewById(R.id.btnNavHome)
         btnNavRefresh = findViewById(R.id.btnNavRefresh)
-        btnAdminNotify = findViewById(R.id.btnAdminNotify)
-
-        btnAdminNotify.setOnClickListener {
-            startActivity(Intent(this, AdminPanelActivity::class.java))
-        }
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -160,6 +143,9 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = true
             allowFileAccessFromFileURLs = true
             allowUniversalAccessFromFileURLs = true
+        }
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            enqueueDownload(url, userAgent, contentDisposition, mimeType)
         }
         // 취약점: origin 검증 없이 "App" 인터페이스를 모든 URL에 노출
         // 악의적 서버가 App.getAuthToken() 호출로 토큰 탈취 가능
@@ -191,26 +177,38 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                Log.d(TAG, "Loading URL: $url")
-                return false
+                return handleUrlNavigation(url, null)
+            }
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                return handleUrlNavigation(
+                    request?.url?.toString(),
+                    request?.requestHeaders?.get("User-Agent")
+                )
             }
         }
         webView.webChromeClient = WebChromeClient()
 
+        btnNavLogin.setOnClickListener {
+            webView.loadUrl(buildSiteUrl("login"))
+        }
+        btnNavLogout.setOnClickListener {
+            logoutFromWeb()
+        }
         btnNavBack.setOnClickListener {
             if (webView.canGoBack()) {
                 webView.goBack()
             }
         }
         btnNavHome.setOnClickListener {
-            webView.loadUrl(homeUrl)
+            webView.loadUrl(buildSiteUrl())
         }
         btnNavRefresh.setOnClickListener {
             webView.reload()
         }
-
-        // FCM: 알림 권한 요청 및 토큰 취득
-        requestNotificationPermissionIfNeeded()
 
         // Handle deep link if launched via intent
         handleDeepLink(intent)
@@ -235,112 +233,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // AdminPanelActivity 로그인 성공 후 토큰이 저장된 경우 관리자 버튼 표시
-        val adminToken = getSharedPreferences(AdminPanelActivity.PREFS, MODE_PRIVATE)
-            .getString(AdminPanelActivity.KEY_ADMIN_TOKEN, null)
-        val isAdmin = !adminToken.isNullOrEmpty()
-        btnAdminNotify.visibility = if (isAdmin) View.VISIBLE else View.GONE
-        Log.d(TAG, "onResume - admin_token present: $isAdmin")
-
-        // [Phase 2] 긴급 공지사항 팝업 체크
-        // 공격자가 관리자 권한 탈취 후 공지사항에 악성 링크 삽입 시
-        // 앱 실행/복귀 시마다 백엔드에서 최신 긴급 공지를 조회하여 팝업 표시
-        fetchAndShowUrgentNotice()
-    }
-
-    /**
-     * ── [Phase 2] 긴급 공지사항 팝업 ─────────────────────────────────────
-     *
-     * 공격 시나리오:
-     *   1. 공격자가 관리자 권한 탈취 (Phase 1: APK 디컴파일 → 하드코딩 크레덴셜 추출)
-     *   2. /admin/api/notices 에 긴급 공지 등록:
-     *      { "title": "긴급 보안 업데이트", "content": "...", "linkUrl": "http://attacker-c2.com/fake-store", "urgent": true }
-     *   3. 사용자 앱 실행 → 이 메서드 호출 → 팝업 표시
-     *   4. 사용자는 '공식 공지사항'이므로 신뢰 → 링크 클릭
-     *   5. [Phase 3] WebView가 가짜 구글 플레이 스토어로 이동
-     *
-     * 취약점:
-     *   - 공지사항 API에 URL 검증 없음 → 임의 URL 삽입 가능
-     *   - 팝업에서 URL 검증 없이 WebView에 로드 → Open Redirect
-     *   - 사용자 신뢰를 악용한 사회공학적 공격
-     */
-    private fun fetchAndShowUrgentNotice() {
-        thread {
-            try {
-                val conn = URL("$BACKEND_URL/api/notices/latest-urgent")
-                    .openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("Accept", "application/json")
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
-
-                if (conn.responseCode == 200) {
-                    val json = JSONObject(conn.inputStream.bufferedReader().readText())
-                    val noticeId = json.optLong("id", -1L)
-                    val title    = json.optString("title", "")
-                    val content  = json.optString("content", "")
-                    val linkUrl  = json.optString("linkUrl", "")
-
-                    if (noticeId < 0 || title.isEmpty()) return@thread
-
-                    // 이미 표시한 공지는 재표시 하지 않음 (noticeId 추적)
-                    val prefs = getSharedPreferences("bookvillage_prefs", MODE_PRIVATE)
-                    val lastShownId = prefs.getLong("last_notice_popup_id", -1L)
-                    if (noticeId == lastShownId) return@thread
-
-                    prefs.edit().putLong("last_notice_popup_id", noticeId).apply()
-                    Log.d(TAG, "[Phase 2] Urgent notice fetched: id=$noticeId title=$title linkUrl=$linkUrl")
-
-                    runOnUiThread { showUrgentNoticeDialog(title, content, linkUrl) }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "[Phase 2] 공지 fetch 실패: ${e.message}")
-            }
-        }
-    }
-
-    /**
-     * ── [Phase 2 → Phase 3] 긴급 공지 팝업 다이얼로그 ───────────────────
-     *
-     * 취약점:
-     *   - linkUrl 검증 없음 → 공격자 서버 URL 삽입 가능
-     *   - WebView가 외부 URL을 아무 제한 없이 로드
-     *     → 가짜 구글 플레이 스토어(Phase 3)로 유도
-     *   - android:usesCleartextTraffic=true → HTTP 피싱 페이지 로드 허용
-     *   - 사용자는 '공식 앱 공지사항'을 신뢰 → 경계심 낮음
-     *
-     * [방어 방법]
-     *   - linkUrl을 allowlist 도메인만 허용
-     *   - shouldOverrideUrlLoading에서 외부 도메인 차단
-     *   - 공지사항 등록 시 서버에서 URL 패턴 검증
-     */
-    private fun showUrgentNoticeDialog(title: String, content: String, linkUrl: String) {
-        val builder = AlertDialog.Builder(this)
-            .setTitle("🔔 $title")
-            .setMessage(content)
-            .setCancelable(false)
-
-        if (linkUrl.isNotEmpty()) {
-            builder.setPositiveButton("업데이트 / 자세히 보기") { _, _ ->
-                // 취약점: URL 검증 없이 WebView에 로드
-                // → 공격자 서버(가짜 플레이 스토어)로 직접 이동
-                Log.d(TAG, "[Phase 2→3] Notice link clicked, loading: $linkUrl")
-                webView.loadUrl(linkUrl)
-            }
-        }
-
-        builder.setNegativeButton("나중에") { dialog, _ -> dialog.dismiss() }
-        builder.show()
+        Log.d(TAG, "onResume")
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         intent?.let {
-            // FCM 알림 클릭으로 전달된 url 처리
-            val fcmUrl = it.getStringExtra("fcm_url")
-            if (!fcmUrl.isNullOrEmpty()) {
-                Log.d(TAG, "FCM notification clicked, loading url: $fcmUrl")
-                webView.loadUrl(fcmUrl)
+            val openUrl = it.getStringExtra("open_url")
+            if (!openUrl.isNullOrEmpty()) {
+                Log.d(TAG, "open_url received: $openUrl")
+                webView.loadUrl(openUrl)
             } else {
                 handleDeepLink(it)
             }
@@ -352,8 +254,8 @@ class MainActivity : AppCompatActivity() {
         if (data != null) {
             val path = data.path ?: ""
             val targetUrl = when {
-                path.isNotEmpty() -> "$homeUrl$path"
-                else -> homeUrl
+                path.isNotEmpty() -> buildSiteUrl(path)
+                else -> buildSiteUrl()
             }
             Log.d(TAG, "Deep link received: $data -> navigating to $targetUrl")
             Log.d(TAG, "Deep link params: ${data.query}")
@@ -361,32 +263,162 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> fetchFcmToken()
-                else -> requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    private fun handleUrlNavigation(url: String?, userAgent: String?): Boolean {
+        if (url.isNullOrBlank()) {
+            return false
+        }
+
+        Log.d(TAG, "Loading URL: $url")
+        val uri = Uri.parse(url)
+        val scheme = uri.scheme?.lowercase()
+
+        if (scheme == "http" || scheme == "https") {
+            if (isDownloadableUrl(url)) {
+                enqueueDownload(url, userAgent, null, null)
+                return true
             }
-        } else {
-            fetchFcmToken()
+            return false
+        }
+
+        return openExternalUri(uri)
+    }
+
+    private fun isDownloadableUrl(url: String): Boolean {
+        return DOWNLOADABLE_FILE_PATTERN.containsMatchIn(url)
+    }
+
+    private fun enqueueDownload(
+        url: String?,
+        userAgent: String?,
+        contentDisposition: String?,
+        mimeType: String?
+    ) {
+        if (url.isNullOrBlank() || !URLUtil.isNetworkUrl(url)) {
+            url?.let { openExternalUri(Uri.parse(it)) }
+            return
+        }
+
+        runCatching {
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val resolvedMimeType = resolveMimeType(url, fileName, mimeType)
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setTitle(fileName)
+                setDescription("Downloading file")
+                setAllowedOverMetered(true)
+                setAllowedOverRoaming(true)
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                addRequestHeader("User-Agent", userAgent ?: webView.settings.userAgentString)
+
+                CookieManager.getInstance().getCookie(url)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { addRequestHeader("Cookie", it) }
+
+                if (!resolvedMimeType.isNullOrBlank()) {
+                    setMimeType(resolvedMimeType)
+                }
+            }
+
+            val downloadManager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+            downloadManager.enqueue(request)
+            Toast.makeText(this, "다운로드를 시작했습니다.", Toast.LENGTH_SHORT).show()
+        }.onFailure { error ->
+            Log.e(TAG, "Failed to enqueue download: $url", error)
+            Toast.makeText(this, "다운로드를 시작하지 못했습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun fetchFcmToken() {
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (!task.isSuccessful) {
-                Log.w(TAG, "FCM token fetch failed", task.exception)
-                return@addOnCompleteListener
-            }
-            val token = task.result
-            // 취약점: FCM 토큰을 로그에 노출 (CTF 챌린지 - 로그캣에서 토큰 탈취)
-            Log.d(TAG, "FCM Token: $token")
-            // SharedPreferences에 저장 (AppBridge.getFcmToken()으로 JS에서 접근 가능)
-            getSharedPreferences("bookvillage_prefs", MODE_PRIVATE)
-                .edit().putString("fcm_token", token).apply()
+    private fun resolveMimeType(url: String, fileName: String, mimeType: String?): String? {
+        if (!mimeType.isNullOrBlank() && mimeType != "application/octet-stream") {
+            return mimeType
         }
+
+        val extensionFromUrl = MimeTypeMap.getFileExtensionFromUrl(url)?.trim().orEmpty()
+        val extension = when {
+            extensionFromUrl.isNotEmpty() -> extensionFromUrl
+            fileName.contains('.') -> fileName.substringAfterLast('.', "")
+            else -> ""
+        }.lowercase()
+
+        if (extension.isEmpty()) {
+            return mimeType
+        }
+
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+            ?: when (extension) {
+                "apk" -> "application/vnd.android.package-archive"
+                else -> mimeType
+            }
+    }
+
+    private fun openExternalUri(uri: Uri): Boolean {
+        return runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+            true
+        }.getOrElse { error ->
+            Log.w(TAG, "Failed to open external URI: $uri", error)
+            false
+        }
+    }
+
+    private fun buildSiteUrl(path: String = ""): String {
+        val normalizedPath = path.trim().trimStart('/')
+        return if (normalizedPath.isEmpty()) {
+            "$baseSiteUrl/"
+        } else {
+            "$baseSiteUrl/$normalizedPath"
+        }
+    }
+
+    private fun logoutFromWeb() {
+        val logoutUrl = buildSiteUrl("api/auth/logout")
+        val cookieHeader = CookieManager.getInstance().getCookie(buildSiteUrl())
+
+        Thread {
+            try {
+                val connection = (URL(logoutUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                    doOutput = true
+                    instanceFollowRedirects = false
+                    setRequestProperty("Accept", "application/json")
+                    if (!cookieHeader.isNullOrBlank()) {
+                        setRequestProperty("Cookie", cookieHeader)
+                    }
+                }
+                connection.outputStream.use { }
+                connection.inputStream?.close()
+                connection.errorStream?.close()
+                connection.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "Logout request failed, clearing local web session anyway", e)
+            }
+
+            runOnUiThread {
+                clearWebSession()
+                webView.loadUrl(buildSiteUrl())
+            }
+        }.start()
+    }
+
+    private fun clearWebSession() {
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setCookie(buildSiteUrl(), "SESSION_TOKEN=; Max-Age=0; Path=/")
+        cookieManager.flush()
+
+        webView.evaluateJavascript(
+            """
+                (function() {
+                    try {
+                        sessionStorage.removeItem('bookvillage_session_token');
+                        sessionStorage.removeItem('bookvillage_user');
+                        window.dispatchEvent(new Event('bookvillage-auth-changed'));
+                    } catch (e) {}
+                })();
+            """.trimIndent(),
+            null
+        )
     }
 
     /**
@@ -420,13 +452,12 @@ class MainActivity : AppCompatActivity() {
             .putString(AdminPanelActivity.KEY_ADMIN_TOKEN, token)
             .putString(AdminPanelActivity.KEY_ADMIN_NAME, name)
             .apply()
-        btnAdminNotify.visibility = View.VISIBLE
         Log.w(TAG, "Admin access granted: name=$name token=$token")
     }
 
     private fun loadHome() {
         Log.d(TAG, "Loading home: $homeUrl (DB: root/$DB_PASSWORD, Admin: admin/$ADMIN_PASSWORD)")
         webView.clearCache(true)
-        webView.loadUrl(homeUrl)
+        webView.loadUrl(buildSiteUrl())
     }
 }

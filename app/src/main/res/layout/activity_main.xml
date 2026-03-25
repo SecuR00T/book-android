@@ -10,57 +10,86 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- 관리자 전용: ADB로 권한 탈취 후 표시됨 (기본 hidden) -->
-    <Button
-        android:id="@+id/btnAdminNotify"
-        android:layout_width="match_parent"
-        android:layout_height="40dp"
-        android:text="[관리자] 전체 알림 발송"
-        android:backgroundTint="#C62828"
-        android:textColor="#FFFFFF"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:orientation="horizontal"
-        android:background="#F5F5F5"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="6dp">
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#F5F5F5">
 
-        <ImageButton
-            android:id="@+id/btnNavBack"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Back"
-            android:padding="10dp"
-            android:src="@drawable/ic_nav_back"
-            android:tint="#222222" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="4dp">
 
-        <ImageButton
-            android:id="@+id/btnNavHome"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Home"
-            android:padding="10dp"
-            android:src="@drawable/ic_nav_home"
-            android:tint="#222222" />
+            <Button
+                android:id="@+id/btnNavLogin"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="#C41E3A"
+                android:text="LOGIN"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
 
-        <ImageButton
-            android:id="@+id/btnNavRefresh"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Refresh"
-            android:padding="10dp"
-            android:src="@drawable/ic_nav_refresh"
-            android:tint="#222222" />
+            <Button
+                android:id="@+id/btnNavLogout"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:backgroundTint="#5A4634"
+                android:text="LOGOUT"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingBottom="6dp">
+
+            <ImageButton
+                android:id="@+id/btnNavBack"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Back"
+                android:padding="10dp"
+                android:src="@drawable/ic_nav_back"
+                android:tint="#222222" />
+
+            <ImageButton
+                android:id="@+id/btnNavHome"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Home"
+                android:padding="10dp"
+                android:src="@drawable/ic_nav_home"
+                android:tint="#222222" />
+
+            <ImageButton
+                android:id="@+id/btnNavRefresh"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Refresh"
+                android:padding="10dp"
+                android:src="@drawable/ic_nav_refresh"
+                android:tint="#222222" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
 </LinearLayout>
