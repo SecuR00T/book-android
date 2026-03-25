@@ -62,29 +62,11 @@
             </intent-filter>
         </activity>
 
-        <!--
-            CTF 취약점: 관리자 패널 딥링크 - 디컴파일 시 발견 가능
-            apktool / jadx 로 AndroidManifest.xml 분석 시 노출됨
 
-            진입 방법 (디컴파일 후 발견):
-              adb shell am start -W \
-                -a android.intent.action.VIEW \
-                -d "bookvillage://admin-panel" \
-                com.bookvillage.mock
-        -->
         <activity
-            android:name=".AdminPanelActivity"
-            android:exported="true"
-            android:label="관리자 패널"
-            android:configChanges="orientation|screenSize|keyboardHidden">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="bookvillage" android:host="admin-panel" />
-            </intent-filter>
-        </activity>
-
+            android:name=".PopupAdminActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
 
     </application>
 </manifest>

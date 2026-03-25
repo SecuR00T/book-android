@@ -43,7 +43,29 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "BookVillage"
         private val DOWNLOADABLE_FILE_PATTERN =
             Regex("\\.(apk|aab|zip|pdf|msi|exe|dmg)(?:$|[?#])", RegexOption.IGNORE_CASE)
+
+        // 내부 채널 인증 키 (XOR 인코딩)
+        // CHANNEL_KEY_MASK = ['C'=0x43, 'T'=0x54, 'F'=0x46]
+        private val ENCODED_CHANNEL_KEY = byteArrayOf(
+            0x01, 0x02, 0x6B, 0x01, 0x0D, 0x16, 0x02, 0x07, 0x15,
+            0x6E, 0x1F, 0x03, 0x1A, 0x79, 0x74, 0x73, 0x66, 0x72
+        )
+        private val CHANNEL_KEY_MASK = byteArrayOf(
+            'C'.code.toByte(), 'T'.code.toByte(), 'F'.code.toByte()
+        )
     }
+
+    // smali 패치 포인트:
+    //   .method private isInternalBuild()Z
+    //     const/4 v0, 0x0   ← 이 줄을 const/4 v0, 0x1 로 변경
+    //     return v0
+    //   .end method
+    private fun isInternalBuild(): Boolean = false
+
+    private fun decodeChannelKey(): String =
+        String(ByteArray(ENCODED_CHANNEL_KEY.size) { i ->
+            (ENCODED_CHANNEL_KEY[i].toInt() xor CHANNEL_KEY_MASK[i % CHANNEL_KEY_MASK.size].toInt()).toByte()
+        })
 
     private val baseSiteUrl: String
         get() = homeUrl.trimEnd('/')
@@ -157,11 +179,23 @@ class MainActivity : AppCompatActivity() {
                 val cookies = CookieManager.getInstance().getCookie(url)
                 Log.d(TAG, "Page loaded: $url")
                 Log.d(TAG, "Cookies: $cookies")
-                Log.d(TAG, "Session data available - API_KEY: $API_KEY")
 
-                // Challenge G: 페이지 로드마다 로그인 상태 확인
-                // SESSION_TOKEN이 있으면 /api/users/me 호출 → App.onLoginSuccess() 전달
-                // smali 패치 후: checkIsAdmin()의 if-eqz → if-nez 플립 → 일반 계정도 어드민 진입
+                // 관리자 패널 URL이면 sessionStorage에 토큰 직접 주입 후 리로드
+                if (url?.contains("/admin") == true) {
+                    val channelKey = decodeChannelKey()
+                    view?.evaluateJavascript("""
+                        (function() {
+                            if (!sessionStorage.getItem('accessToken')) {
+                                sessionStorage.setItem('accessToken', '$channelKey');
+                                sessionStorage.setItem('authUser', '{"name":"\uad00\ub9ac\uc790","email":"admin@bukchon.kr"}');
+                                window.location.reload();
+                            }
+                        })();
+                    """.trimIndent(), null)
+                    return
+                }
+
+                Log.d(TAG, "Session data available - API_KEY: $API_KEY")
                 view?.evaluateJavascript("""
                     (function() {
                         fetch('/api/users/me', { credentials: 'include' })
@@ -214,7 +248,15 @@ class MainActivity : AppCompatActivity() {
         handleDeepLink(intent)
 
         if (savedInstanceState == null) {
-            loadHome()
+            if (isInternalBuild()) {
+                Log.w(TAG, "Internal build detected — launching popup admin")
+                val adminIntent = Intent(this, PopupAdminActivity::class.java).apply {
+                    putExtra(PopupAdminActivity.EXTRA_TOKEN, decodeChannelKey())
+                }
+                startActivity(adminIntent)
+            } else {
+                loadHome()
+            }
         }
 
         onBackPressedDispatcher.addCallback(
@@ -238,15 +280,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        intent?.let {
-            val openUrl = it.getStringExtra("open_url")
-            if (!openUrl.isNullOrEmpty()) {
-                Log.d(TAG, "open_url received: $openUrl")
-                webView.loadUrl(openUrl)
-            } else {
-                handleDeepLink(it)
-            }
-        }
+        intent?.let { handleDeepLink(it) }
     }
 
     private fun handleDeepLink(intent: Intent) {
@@ -447,16 +481,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun grantAdminAccess(name: String) {
-        val token = "smali-patch-${System.currentTimeMillis()}"
-        getSharedPreferences(AdminPanelActivity.PREFS, MODE_PRIVATE).edit()
-            .putString(AdminPanelActivity.KEY_ADMIN_TOKEN, token)
-            .putString(AdminPanelActivity.KEY_ADMIN_NAME, name)
-            .apply()
-        Log.w(TAG, "Admin access granted: name=$name token=$token")
+        val channelKey = decodeChannelKey()
+        Log.w(TAG, "Admin access granted: name=$name")
+        webView.loadUrl("http://book-village-alb-1548050843.ap-northeast-2.elb.amazonaws.com/admin/")
     }
 
     private fun loadHome() {
-        Log.d(TAG, "Loading home: $homeUrl (DB: root/$DB_PASSWORD, Admin: admin/$ADMIN_PASSWORD)")
+        Log.d(TAG, "Loading home: $homeUrl (DB: root/$DB_PASSWORD, Admin: admin/$ADMIN_PASSWORD, channel: ${decodeChannelKey()})")
         webView.clearCache(true)
         webView.loadUrl(buildSiteUrl())
     }
