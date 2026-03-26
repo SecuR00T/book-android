@@ -33,7 +33,6 @@ class PopupAdminActivity : AppCompatActivity() {
         private const val NAVY_DARK    = "#23284B"
         private const val TBL_HDR_BG   = "#F8F7F4"
         private const val TBL_HDR_TEXT  = "#5C4A32"
-        private const val ROW_HOVER    = "#FAF9F7"
         private const val BADGE_GRAY   = "#E0E0E0"
         private const val TEXT_MUTED   = "#9E9E9E"
         private const val TEXT_PRIMARY  = "#212121"
@@ -41,6 +40,11 @@ class PopupAdminActivity : AppCompatActivity() {
         private const val BORDER_COLOR = "#E5E5E5"
         private const val BG_PAGE      = "#F9FAFB"
         private const val RED          = "#EF4444"
+        private const val BLUE_BG     = "#DBEAFE"
+        private const val BLUE_TEXT   = "#1D4ED8"
+        private const val AMBER_BG    = "#FEF3C7"
+        private const val AMBER_TEXT  = "#B45309"
+        private const val AMBER       = "#F59E0B"
     }
 
     private lateinit var bypassToken: String
@@ -56,6 +60,10 @@ class PopupAdminActivity : AppCompatActivity() {
     private val deviceLabels = arrayOf("전체", "모바일", "PC")
     private val activeKeys   = arrayOf("", "true", "false")
     private val activeLabels = arrayOf("전체", "사용", "미사용")
+
+    /* popupType 매핑 */
+    private val typeKeys   = arrayOf("update", "ad")
+    private val typeLabels = arrayOf("업데이트 공지", "광고 배너")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,13 +81,8 @@ class PopupAdminActivity : AppCompatActivity() {
             setPadding(dp(16), dp(16), dp(16), dp(24))
         }
 
-        /* ── 페이지 헤더 (PageHeader 스타일) ── */
         content.addView(buildPageHeader())
-
-        /* ── 필터 카드 ── */
         content.addView(buildFilterCard())
-
-        /* ── 테이블 카드 ── */
         content.addView(buildTableCard())
 
         root.addView(content)
@@ -117,8 +120,7 @@ class PopupAdminActivity : AppCompatActivity() {
     private fun buildFilterCard(): LinearLayout {
         val card = makeCard()
         card.setPadding(dp(16), dp(14), dp(16), dp(14))
-        val lp = LinearLayout.LayoutParams(LP_MATCH, LP_WRAP).also { it.bottomMargin = dp(12) }
-        card.layoutParams = lp
+        card.layoutParams = LinearLayout.LayoutParams(LP_MATCH, LP_WRAP).also { it.bottomMargin = dp(12) }
 
         /* 검색어 */
         val searchBlock = LinearLayout(this).apply {
@@ -171,7 +173,7 @@ class PopupAdminActivity : AppCompatActivity() {
         filterRow.addView(deviceBlock)
         card.addView(filterRow)
 
-        /* 버튼 행: 검색 + 새 팝업 등록 */
+        /* 버튼 행 */
         val btnRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
@@ -210,10 +212,8 @@ class PopupAdminActivity : AppCompatActivity() {
             minimumWidth = dp(780)
         }
 
-        /* 테이블 헤더 */
         tableWrapper.addView(buildTableHeader())
 
-        /* 테이블 바디 */
         tableBody = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -225,8 +225,8 @@ class PopupAdminActivity : AppCompatActivity() {
     }
 
     private fun buildTableHeader(): LinearLayout {
-        val headers = listOf("순번", "종류", "팝업제목", "시작일", "종료일", "사용여부", "Device", "등록일", "관리")
-        val weights = floatArrayOf(0.5f, 0.9f, 1.8f, 1.1f, 1.1f, 0.9f, 0.9f, 1.1f, 1.5f)
+        val headers = listOf("순번", "타입", "팝업제목", "시작일", "종료일", "사용여부", "Device", "등록일", "관리")
+        val weights = colWeights()
 
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -245,6 +245,8 @@ class PopupAdminActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun colWeights() = floatArrayOf(0.5f, 0.9f, 1.8f, 1.1f, 1.1f, 0.9f, 0.9f, 1.1f, 1.5f)
 
     /* ══════════════════════════════════════════════════════════════
        데이터 로드 & 필터
@@ -299,29 +301,21 @@ class PopupAdminActivity : AppCompatActivity() {
     private fun addTableRow(popup: JSONObject, rowNum: Int) {
         val id        = popup.optLong("id")
         val title     = popup.optString("title")
-        val content   = popup.optString("content", "")
         val startDate = popup.optString("startDate", "-")
         val endDate   = popup.optString("endDate", "-")
         val active    = popup.optBoolean("isActive")
         val device    = popup.optString("deviceType", "all")
         val createdAt = popup.optString("createdAt", "-").let { if (it.length >= 10) it.substring(0, 10) else "-" }
-        val isAd      = content.startsWith("[AD]")
+        val popupType = popup.optString("popupType", "update")
+        val isAd      = popupType == "ad"
 
-        val weights = floatArrayOf(0.5f, 0.9f, 1.8f, 1.1f, 1.1f, 0.9f, 0.9f, 1.1f, 1.5f)
+        val weights = colWeights()
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(Color.WHITE)
             setPadding(0, dp(2), 0, dp(2))
-
-            /* 하단 보더 */
-            val border = View(this@PopupAdminActivity).apply {
-                layoutParams = LinearLayout.LayoutParams(LP_MATCH, dp(1))
-                setBackgroundColor(Color.parseColor(BORDER_COLOR))
-            }
-
-            // 나중에 보더 추가
         }
 
         /* 순번 */
@@ -330,15 +324,15 @@ class PopupAdminActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
         })
 
-        /* 종류 배지 */
+        /* 타입 배지 (웹과 동일: 파란=업데이트, 앰버=광고) */
         val typeContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, LP_WRAP, weights[1])
             setPadding(dp(8), dp(10), dp(8), dp(10))
         }
         typeContainer.addView(makeBadge(
             text = if (isAd) "광고" else "업데이트",
-            bgColor = if (isAd) "#F59E0B" else "#3B82F6",
-            textColor = "#FFFFFF"
+            bgColor = if (isAd) AMBER_BG else BLUE_BG,
+            textColor = if (isAd) AMBER_TEXT else BLUE_TEXT
         ))
         row.addView(typeContainer)
 
@@ -424,10 +418,9 @@ class PopupAdminActivity : AppCompatActivity() {
        ══════════════════════════════════════════════════════════════ */
     private fun showForm(existing: JSONObject?) {
         val isEdit = existing != null
-        val today     = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val today      = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
         val monthLater = LocalDate.now().plusMonths(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
 
-        /* 다이얼로그 컨텐츠 */
         val scroll = ScrollView(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -463,52 +456,123 @@ class PopupAdminActivity : AppCompatActivity() {
             return block to et
         }
 
-        /* 팝업 종류 스피너 */
-        val existingContent = existing?.optString("content", "") ?: ""
-        val isAdType = existingContent.startsWith("[AD]")
-        val typeLabels = arrayOf("업데이트", "광고")
-        var selectedType = if (isAdType) 1 else 0
+        /* ── 팝업 타입 토글 버튼 (웹과 동일) ── */
+        val existingType = existing?.optString("popupType", "update") ?: "update"
+        var selectedTypeKey = existingType  // "update" | "ad"
 
         val typeBlock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(LP_MATCH, LP_WRAP).also { it.bottomMargin = dp(12) }
         }
         typeBlock.addView(TextView(this).apply {
-            text = "팝업 종류 *"
+            text = "팝업 타입 *"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor(TEXT_PRIMARY))
             setPadding(0, 0, 0, dp(4))
         })
-        val spType = Spinner(this).apply {
-            adapter = ArrayAdapter(this@PopupAdminActivity, android.R.layout.simple_spinner_dropdown_item, typeLabels)
-            setSelection(selectedType)
-            background = makeInputBg()
-            setPadding(dp(10), dp(6), dp(10), dp(6))
+
+        val toggleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LP_MATCH, LP_WRAP)
         }
-        typeBlock.addView(spType)
+
+        val btnUpdate = Button(this).apply {
+            text = "업데이트 공지"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            isAllCaps = false
+            layoutParams = LinearLayout.LayoutParams(0, dp(40), 1f).also { it.rightMargin = dp(6) }
+            stateListAnimator = null
+            elevation = 0f
+        }
+        val btnAd = Button(this).apply {
+            text = "광고 배너"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            isAllCaps = false
+            layoutParams = LinearLayout.LayoutParams(0, dp(40), 1f)
+            stateListAnimator = null
+            elevation = 0f
+        }
+
+        fun updateToggleStyle(contentHintView: EditText?) {
+            if (selectedTypeKey == "update") {
+                btnUpdate.setTextColor(Color.WHITE)
+                btnUpdate.background = GradientDrawable().apply {
+                    setColor(Color.parseColor(NAVY)); cornerRadius = dp(8).toFloat()
+                    setStroke(1, Color.parseColor(NAVY))
+                }
+                btnAd.setTextColor(Color.parseColor(TEXT_MUTED))
+                btnAd.background = GradientDrawable().apply {
+                    setColor(Color.WHITE); cornerRadius = dp(8).toFloat()
+                    setStroke(1, Color.parseColor(BORDER_COLOR))
+                }
+            } else {
+                btnAd.setTextColor(Color.WHITE)
+                btnAd.background = GradientDrawable().apply {
+                    setColor(Color.parseColor(AMBER)); cornerRadius = dp(8).toFloat()
+                    setStroke(1, Color.parseColor(AMBER))
+                }
+                btnUpdate.setTextColor(Color.parseColor(TEXT_MUTED))
+                btnUpdate.background = GradientDrawable().apply {
+                    setColor(Color.WHITE); cornerRadius = dp(8).toFloat()
+                    setStroke(1, Color.parseColor(BORDER_COLOR))
+                }
+            }
+            contentHintView?.hint = if (selectedTypeKey == "ad") "광고 내용을 입력하세요"
+                else "앱이름|업데이트 설명  (예: 북촌|보안 업데이트가 포함되어 있습니다)"
+        }
+
+        toggleRow.addView(btnUpdate)
+        toggleRow.addView(btnAd)
+        typeBlock.addView(toggleRow)
         layout.addView(typeBlock)
 
-        val displayContent = if (isAdType) existingContent.removePrefix("[AD]") else existingContent
+        /* ── 제목 ── */
         val (titleBlock, etTitle) = labeledInput("제목", true, "팝업 제목을 입력하세요", existing?.optString("title") ?: "")
-        val (contentBlock, etContent) = labeledInput("내용", false,
-            if (isAdType) "광고 내용을 입력하세요" else "업데이트 설명 또는 앱이름|설명 형식",
-            displayContent, multiline = true)
-        val (linkBlock, etLink) = labeledInput("링크 URL", false, "https://example.com 또는 APK 다운로드 경로", existing?.optString("linkUrl") ?: "")
-
-        spType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                selectedType = pos
-                etContent.hint = if (pos == 1) "광고 내용을 입력하세요" else "업데이트 설명 또는 앱이름|설명 형식"
-            }
-            override fun onNothingSelected(p: AdapterView<*>?) {}
-        }
-
         layout.addView(titleBlock)
+
+        /* ── 내용 ── */
+        val contentHint = if (existingType == "ad") "광고 내용을 입력하세요"
+            else "앱이름|업데이트 설명  (예: 북촌|보안 업데이트가 포함되어 있습니다)"
+        val (contentBlock, etContent) = labeledInput("내용", false, contentHint, existing?.optString("content") ?: "", multiline = true)
         layout.addView(contentBlock)
+
+        /* 타입 힌트 안내문 (업데이트일 때만 표시) */
+        val hintText = TextView(this).apply {
+            text = "앱이름|설명 형식으로 입력하면 앱카드에 이름이 표시됩니다."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTextColor(Color.parseColor(TEXT_MUTED))
+            setPadding(0, 0, 0, dp(8))
+            visibility = if (existingType == "update") View.VISIBLE else View.GONE
+        }
+        layout.addView(hintText)
+
+        /* 토글 클릭 핸들러 연결 */
+        btnUpdate.setOnClickListener {
+            selectedTypeKey = "update"
+            updateToggleStyle(etContent)
+            hintText.visibility = View.VISIBLE
+        }
+        btnAd.setOnClickListener {
+            selectedTypeKey = "ad"
+            updateToggleStyle(etContent)
+            hintText.visibility = View.GONE
+        }
+        updateToggleStyle(etContent)
+
+        /* ── 이미지 URL ── */
+        val (imageBlock, etImage) = labeledInput("이미지 URL", false,
+            "이미지 경로 (예: /uploads/popups/xxx.jpg)",
+            existing?.optString("imageUrl") ?: "")
+        layout.addView(imageBlock)
+
+        /* ── 링크 URL ── */
+        val (linkBlock, etLink) = labeledInput("링크 URL", false,
+            "https://example.com 또는 APK 다운로드 경로",
+            existing?.optString("linkUrl") ?: "")
         layout.addView(linkBlock)
 
-        /* 시작일 / 종료일 행 */
+        /* ── 시작일 / 종료일 ── */
         val dateRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(LP_MATCH, LP_WRAP).also { it.bottomMargin = dp(12) }
@@ -560,7 +624,7 @@ class PopupAdminActivity : AppCompatActivity() {
         dateRow.addView(endBlock)
         layout.addView(dateRow)
 
-        /* Device 타입 + 사용여부 행 */
+        /* ── Device 타입 + 사용여부 ── */
         val optRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(LP_MATCH, LP_WRAP).also { it.bottomMargin = dp(12) }
@@ -592,11 +656,11 @@ class PopupAdminActivity : AppCompatActivity() {
         }
         devBlock.addView(spDevice)
 
-        val activeBlock = LinearLayout(this).apply {
+        val activeFormBlock = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LP_WRAP, 1f)
         }
-        activeBlock.addView(TextView(this).apply {
+        activeFormBlock.addView(TextView(this).apply {
             text = "사용여부"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTypeface(null, Typeface.BOLD)
@@ -614,20 +678,17 @@ class PopupAdminActivity : AppCompatActivity() {
                 setTextColor(if (checked) Color.parseColor(NAVY) else Color.parseColor(TEXT_MUTED))
             }
         }
-        activeBlock.addView(cbActive)
+        activeFormBlock.addView(cbActive)
 
         optRow.addView(devBlock)
-        optRow.addView(activeBlock)
+        optRow.addView(activeFormBlock)
         layout.addView(optRow)
 
         scroll.addView(layout)
 
-        /* 다이얼로그 빌드 */
-        val dialog = AlertDialog.Builder(this)
-            .setView(scroll)
-            .create()
+        /* ── 다이얼로그 조립 ── */
+        val dialog = AlertDialog.Builder(this).setView(scroll).create()
 
-        /* 커스텀 헤더 + 하단 버튼 래퍼 */
         val dialogRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
@@ -654,13 +715,12 @@ class PopupAdminActivity : AppCompatActivity() {
             setOnClickListener { dialog.dismiss() }
         })
 
-        /* 헤더 하단 보더 */
         val headerBorder = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LP_MATCH, 1)
             setBackgroundColor(Color.parseColor(BORDER_COLOR))
         }
 
-        /* 하단 버튼 행 */
+        /* 하단 버튼 */
         val footerBorder = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LP_MATCH, 1)
             setBackgroundColor(Color.parseColor(BORDER_COLOR))
@@ -681,20 +741,16 @@ class PopupAdminActivity : AppCompatActivity() {
                     toast("제목을 입력해 주세요.")
                     return@setOnClickListener
                 }
-                val rawContent = etContent.text.toString()
-                val finalContent = if (selectedType == 1) {
-                    if (rawContent.startsWith("[AD]")) rawContent else "[AD]$rawContent"
-                } else {
-                    rawContent.removePrefix("[AD]")
-                }
                 val body = JSONObject().apply {
                     put("title",      titleText)
-                    put("content",    finalContent)
+                    put("content",    etContent.text.toString())
                     put("linkUrl",    etLink.text.toString())
                     put("startDate",  etStart.text.toString())
                     put("endDate",    etEnd.text.toString())
                     put("isActive",   cbActive.isChecked)
                     put("deviceType", formDeviceKeys[selectedDevice])
+                    put("popupType",  selectedTypeKey)
+                    put("imageUrl",   etImage.text.toString())
                 }
                 if (isEdit) updatePopup(existing!!.getLong("id"), body)
                 else createPopup(body)
@@ -791,7 +847,6 @@ class PopupAdminActivity : AppCompatActivity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
-    /** 카드 (흰 배경 + 라운드 + 그림자) */
     private fun makeCard(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -804,7 +859,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 라벨 텍스트 */
     private fun makeLabel(text: String): TextView {
         return TextView(this).apply {
             this.text = text
@@ -814,7 +868,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 인풋 배경 (보더 라운드) */
     private fun makeInputBg(): GradientDrawable {
         return GradientDrawable().apply {
             setColor(Color.WHITE)
@@ -823,7 +876,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 네이비 버튼 */
     private fun makeNavyButton(text: String): Button {
         return Button(this).apply {
             this.text = text
@@ -840,7 +892,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 아웃라인 버튼 */
     private fun makeOutlineButton(text: String): Button {
         return Button(this).apply {
             this.text = text
@@ -858,7 +909,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 빨간 버튼 (삭제) */
     private fun makeRedButton(text: String): Button {
         return Button(this).apply {
             this.text = text
@@ -875,7 +925,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 테이블 셀 텍스트 */
     private fun makeCell(text: String, weight: Float): TextView {
         return TextView(this).apply {
             this.text = text
@@ -887,7 +936,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 채워진 배지 (사용/미사용) */
     private fun makeBadge(text: String, bgColor: String, textColor: String): TextView {
         return TextView(this).apply {
             this.text = text
@@ -902,7 +950,6 @@ class PopupAdminActivity : AppCompatActivity() {
         }
     }
 
-    /** 보더 배지 (Device) */
     private fun makeBorderedBadge(text: String): TextView {
         return TextView(this).apply {
             this.text = text
