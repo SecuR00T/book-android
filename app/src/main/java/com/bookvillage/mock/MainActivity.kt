@@ -218,7 +218,10 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Session data available - API_KEY: $API_KEY")
                 view?.evaluateJavascript("""
                     (function() {
-                        fetch('/api/users/me', { credentials: 'include' })
+                        var headers = {};
+                        var token = sessionStorage.getItem('bookvillage_session_token');
+                        if (token) { headers['X-Session-Token'] = token; }
+                        fetch('/api/users/me', { credentials: 'include', headers: headers })
                             .then(function(r) { return r.ok ? r.json() : null; })
                             .then(function(u) {
                                 if (u && u.role && typeof App !== 'undefined') {
