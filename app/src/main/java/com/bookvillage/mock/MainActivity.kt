@@ -149,6 +149,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         supportActionBar?.hide()
 
+        WebView.setWebContentsDebuggingEnabled(true)
+
         webView = findViewById(R.id.webView)
         btnNavLogin = findViewById(R.id.btnNavLogin)
         btnNavLogout = findViewById(R.id.btnNavLogout)
