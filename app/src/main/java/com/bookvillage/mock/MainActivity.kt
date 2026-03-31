@@ -16,6 +16,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.Toast
@@ -128,10 +129,27 @@ class MainActivity : AppCompatActivity() {
             val role = try { JSONObject(userJson).optString("role", "USER") } catch (e: Exception) { "USER" }
             val name = try { JSONObject(userJson).optString("name", "User") } catch (e: Exception) { "User" }
             Log.d(TAG, "onLoginSuccess: name=$name role=$role")
+
+            // 로그인 성공 → 로그인 버튼 숨기고 로그아웃 버튼 표시
+            runOnUiThread {
+                btnNavLogin.visibility = View.GONE
+                btnNavLogout.visibility = View.VISIBLE
+            }
+
             // checkIsAdmin()이 smali 패치 대상 메서드
             if (checkIsAdmin(role)) {
                 Log.w(TAG, "Challenge G: admin access granted via role=$role (smali-patched?)")
                 runOnUiThread { grantAdminAccess(name) }
+            }
+        }
+
+        @JavascriptInterface
+        fun onLoggedOut() {
+            Log.d(TAG, "onLoggedOut: user is not logged in")
+            // 비로그인 상태 → 로그인 버튼 표시, 로그아웃 버튼 숨김
+            runOnUiThread {
+                btnNavLogin.visibility = View.VISIBLE
+                btnNavLogout.visibility = View.GONE
             }
         }
     }
@@ -205,9 +223,15 @@ class MainActivity : AppCompatActivity() {
                             .then(function(u) {
                                 if (u && u.role && typeof App !== 'undefined') {
                                     App.onLoginSuccess(JSON.stringify(u));
+                                } else if (typeof App !== 'undefined') {
+                                    App.onLoggedOut();
                                 }
                             })
-                            .catch(function() {});
+                            .catch(function() {
+                                if (typeof App !== 'undefined') {
+                                    App.onLoggedOut();
+                                }
+                            });
                     })();
                 """, null)
             }
@@ -227,6 +251,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         webView.webChromeClient = WebChromeClient()
+
+        // 초기 상태: 로그인 버튼만 보이고 로그아웃 버튼은 숨김
+        btnNavLogin.visibility = View.VISIBLE
+        btnNavLogout.visibility = View.GONE
 
         btnNavLogin.setOnClickListener {
             webView.loadUrl(buildSiteUrl("login"))
@@ -433,6 +461,9 @@ class MainActivity : AppCompatActivity() {
 
             runOnUiThread {
                 clearWebSession()
+                // 로그아웃 후 → 로그인 버튼 표시, 로그아웃 버튼 숨김
+                btnNavLogin.visibility = View.VISIBLE
+                btnNavLogout.visibility = View.GONE
                 webView.loadUrl(buildSiteUrl())
             }
         }.start()
